@@ -16,10 +16,10 @@
 
    **`submitdata`的格式取决于您的问卷，需要您自行使用抓包解析。**
 
-3. `git clone`本项目，并编写代码，参见[Demo.py](/demo.py)
+3. `git clone`本项目，并编写代码，参见[demo1.py](/demo1.py)
 
    ```python
-   from QSpider import QSpider
+   from Spider import QSpider
    
    if __name__ == '__main__':
        id = 'rXz5Xu9'
@@ -34,7 +34,46 @@
    [2024-05-21 17:53:50] - 已提交 : <Response [200]>
    ```
 
+## 自动生成答卷
 
+我们往往需要短时间内提交若干份答卷，根据自己的需求，编写对应的答案生成器。
 
+您只需继承`AnswerGenerator`并重写其中的`rule()`方法，并在此方法中描述答案生成的逻辑关系。
 
-- 最后更新于：2024年5月21日
+```python
+class MyGen(AnswerGenerator):
+
+    def __init__(self):
+        super().__init__()
+
+    def rule(self):
+        """
+        重写这个函数，描述所需要的规则。
+
+        :return: None
+        """
+        # Q1 随机
+        if random.random() > 0.5:
+            self.add(1, 1)
+        else:
+            self.add(1, 2)
+        # Q2
+        self.add(2, f'Test:{time.time()}')
+```
+
+并把生成的答案传入`spider.submit()`方法
+
+```python
+gen = MyGen()
+spider.submit(gen.generate())
+```
+
+或
+
+```python
+spider.submit(gen()) 
+```
+
+完整代码详见[demo2.py](/demo2.py)
+
+- 最后更新于：2024年5月22日

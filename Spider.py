@@ -31,7 +31,7 @@ class QSpider(object):
         context.execute(script)
         return context.DecodeId(input)
 
-    def _get_jqsign(self, jqnonce, ktimes):
+    def _get_jqsign(self, jqnonce: str, ktimes: int):
         context = js2py.EvalJs(enable_require=True)
         with open('js/dataenc.js', 'r', encoding='utf8') as f:
             script = f.read()
@@ -45,6 +45,8 @@ class QSpider(object):
         }
         response: Response = self.sessions.get(f'https://www.wjx.cn/vm/{self.shortId}.aspx', headers=self.headers,
                                                timeout=10)
+        # 建议：每个问卷的答题时间为5-60s
+        time.sleep(random.randrange(5, 60))
         return response
 
     def _get_all_params(self, response: Response):
