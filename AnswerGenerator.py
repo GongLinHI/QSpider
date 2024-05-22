@@ -1,4 +1,9 @@
+import copy
+import random
+from collections.abc import Iterable, Sized
 from typing import Union, Any
+
+import numpy as np
 
 
 class AnswerGenerator(object):
@@ -21,6 +26,8 @@ class AnswerGenerator(object):
             raise ValueError('value - Expect NOT None.')
         if isinstance(key, str):
             key = int(key)
+        if key <= 0:
+            raise ValueError('key/index must be positive.')
         self.__content[key] = value
 
     def __delitem__(self, key: Union[int, str]):
@@ -92,3 +99,251 @@ class AnswerGenerator(object):
 
     def clear(self) -> None:
         self.__content.clear()
+
+    @staticmethod
+    def sort(iterable, *, key=None, desc=False):
+        """
+        根据给定的key和desc参数对iterable进行排序。
+
+        :param iterable: 需要排序的可迭代对象。
+        :param key: 排序的键。如果为None或者可调用对象，则直接用作sorted函数的key参数。
+                     如果为与iterable长度相同的可迭代对象，则将其与iterable的元素进行配对，并根据key进行排序。
+                     默认为None。
+        :param desc: 是否降序排序。默认为False。
+        :return: 排序后的iterable，其类型与输入iterable的类型相同（如果可能）。
+        :raise ValueError: 如果key为可迭代对象，但其长度与iterable的长度不同时引发。
+        :raise TypeError: 如果key既不是可调用对象也不是与iterable长度相同的可迭代对象时引发。
+        """
+
+        if (key is None) or callable(key):
+            return sorted(iterable, key=key, reverse=desc)
+        elif isinstance(key, Iterable) and isinstance(key, Sized):
+            if len(iterable) != len(key):
+                raise ValueError("The length of iterable and key must be the same.")
+            # Zip the key and iterable, sort by key, and extract the sorted iterable elements
+            sorted_pairs = sorted(zip(key, iterable), reverse=desc)
+            sorted_iterable = [element for _, element in sorted_pairs]
+        else:
+            raise TypeError("Key must be either a callable or an iterable with the same length as the iterable.")
+
+        return type(iterable)(sorted_iterable)
+
+    @staticmethod
+    def sample(iterable, weights=None, k=1, *, replace=False):
+        """
+        依据iterable和相应的权重weights进行无放回（默认）抽样。
+
+        :param iterable: 候选的可迭代对象
+        :param weights: 各个元素的权重
+        :param k: 抽样个数
+        :param replace: 是否进行又有放回抽样，默认是False
+        :return: 抽样结果
+        """
+        if weights is None:
+            # 如果没有提供权重，则所有元素的权重相同
+            weights = np.ones_like(iterable, dtype=float)
+
+        # 确保权重数组与人口数组的长度相同
+        if len(iterable) != len(weights):
+            raise ValueError("The lengths of population and weights must be the same.")
+
+        # 使用numpy的choice函数进行无放回抽样
+        samples = np.random.choice(iterable, size=k, replace=replace, p=weights / weights.sum())
+        # 如果k为1，返回单个样本，否则返回样本数组
+
+        if k == 1:
+            return samples[0]
+        else:
+            return samples.tolist()
+
+    @staticmethod
+    def generate_normal_random(mu=0.0, sigma=1.0, size=1, dtype=float):
+        """
+        生成符合正态分布的随机数。
+        :param mu: 正态分布的均值。
+        :param sigma: 正态分布的标准差。
+        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param dtype: 输出样本的数据类型。可以是 int 或 float。
+        :return: 从正态分布中抽取的随机数。
+        """
+        # 从正态分布中生成浮点数样本
+        samples = np.random.normal(mu, sigma, size)
+
+        # 如果数据类型是 int，则将样本四舍五入并转换为整数类型
+        if dtype != float and dtype is not None:
+            samples = samples.astype(dtype)
+
+        if size == 1:
+            return samples[0]
+        else:
+            return samples.tolist()
+
+    @staticmethod
+    def generate_poisson_random(lam=1.0, size=1, dtype=int):
+        """
+        生成符合泊松分布的随机数。
+        :param lam: 泊松分布的参数λ（lambda），即事件发生的平均次数。
+        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param dtype: 输出样本的数据类型。可以是 int 或 float，但泊松分布通常用于整数计数，因此建议使用 int。
+        :return: 从泊松分布中抽取的随机数。
+        """
+        # 从泊松分布中生成样本
+        samples = np.random.poisson(lam=lam, size=size)
+
+        # 因为泊松分布本身就是整数分布，所以不需要类型转换
+        # 但如果dtype被指定为float，我们仍然可以转换为float类型
+        if dtype != int and dtype is not None:
+            samples = samples.astype(dtype)
+
+            # 如果size为1，则返回一个单独的数而不是列表
+        if size == 1:
+            return samples[0]  # 或者 samples[0] 如果不是numpy scalar
+        else:
+            return samples.tolist()
+
+    @staticmethod
+    def generate_binomial_random(n, p, size=1, dtype=int):
+        """
+        生成符合二项分布的随机数。
+        :param n: 试验次数
+        :param p: 每次试验成功的概率
+        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param dtype: 输出样本的数据类型。通常是 int，因为二项分布是整数计数的。
+        :return: 从二项分布中抽取的随机数。
+        """
+        # 从二项分布中生成样本
+        samples = np.random.binomial(n=n, p=p, size=size)
+
+        # 如果需要转换为float类型
+        if dtype != int and dtype is not None:
+            samples = samples.astype(dtype)
+
+        # 如果size为1，则返回一个单独的数而不是列表或数组
+        if size == 1:
+            return samples[0]
+        else:
+            return samples.tolist()
+
+    @staticmethod
+    def generate_exponential_random(scale=1.0, size=1, dtype=float):
+        """
+        生成符合指数分布的随机数。
+        :param scale: 指数分布的比例参数（λ的倒数，即1/λ），也称为尺度参数。
+        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param dtype: 输出样本的数据类型。默认为 float。
+        :return: 从指数分布中抽取的随机数。
+        """
+        # 从指数分布中生成样本
+        samples = np.random.exponential(scale=scale, size=size)
+
+        # 如果dtype被指定且不是float，则进行类型转换（但通常指数分布使用float）
+        if dtype != float and dtype is not None:
+            samples = samples.astype(dtype)
+
+            # 如果size为1，则返回一个单独的数而不是列表或数组
+        if size == 1:
+            return samples[0]
+        else:
+            return samples.tolist()
+
+    @staticmethod
+    def generate_gamma_random(shape, scale=1.0, size=1, dtype=float):
+        """
+        生成符合伽马分布的随机数。
+        :param shape: 伽马分布的形状参数（k，也称为α）。
+        :param scale: 伽马分布的比例参数（θ，也称为β），也可以认为是1/λ。
+        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param dtype: 输出样本的数据类型。默认为 float。
+        :return: 从伽马分布中抽取的随机数。
+        """
+
+        # 从伽马分布中生成样本
+        samples = np.random.gamma(shape=shape, scale=scale, size=size)
+
+        # 如果dtype被指定且不是float，则进行类型转换（但通常伽马分布使用float）
+        if dtype != float and dtype is not None:
+            samples = samples.astype(dtype)
+
+        # 如果size为1，则返回一个单独的数而不是列表或数组
+        if size == 1:
+            return samples[0]
+        else:
+            return samples.tolist()
+
+    @staticmethod
+    def generate_f_random(d1, d2, size=1, dtype=float):
+        """
+        生成符合F分布的随机数。
+        :param d1: 分子项的自由度（通常为正态分布的样本大小减1）。
+        :param d2: 分母项的自由度（通常为正态分布的样本大小减1）。
+        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param dtype: 输出样本的数据类型。默认为 float。
+        :return: 从F分布中抽取的随机数。
+        """
+        # 从F分布中生成样本
+        samples = np.random.f(d1, d2, size=size)
+
+        # 如果dtype被指定且不是float，则进行类型转换（但通常F分布使用float）
+        if dtype != float and dtype is not None:
+            samples = samples.astype(dtype)
+
+        # 如果size为1，则返回一个单独的数而不是列表或数组
+        if size == 1:
+            return samples[0]
+        else:
+            return samples.tolist()
+
+    @staticmethod
+    def generate_list(stop: int, *, rType=list):
+        return AnswerGenerator._generate_list(1, stop, rType=rType)
+
+    @staticmethod
+    def generate_list(start: int, stop: int, step: int = 1, *, rType=list):
+        return AnswerGenerator._generate_list(start, stop, step, rType=rType)
+
+    @staticmethod
+    def _generate_list(start: int, stop: int, step: int = 1, *, rType=list):
+        """
+        获取特定的列表/元组，作为候选项
+        :param start: 起始值
+        :param stop: 终止值（包含此值）
+        :param step: 步长
+        :param rType: 返回值的类型，默认为list
+        :return:
+        """
+
+        return type(rType)(range(start, stop + 1, step))
+
+    def single_selection(self, index: int, option_num: int, weights=None):
+        if not isinstance(option_num, int):
+            raise TypeError('option_num must be int.')
+        if option_num <= 0:
+            raise ValueError('option_num must be positive.')
+        if option_num != len(weights):
+            raise ValueError('The lengths of weights must equal to option_num.')
+        self.add(index, random.choices(range(1, option_num + 1), weights, k=1)[0])
+
+    def single_selection(self, index: int, ans):
+        self.add(index, ans)
+
+    def multi_selection(self, index: int, ans):
+        if isinstance(ans, (str, int)):
+            self.add(index, ans)
+        elif isinstance(ans, (list, tuple)):
+            ans = [str(x) for x in ans]
+            self.add(index, '|'.join(ans))
+
+    def fill_blanks(self, index: int, text: str = ''):
+        self.add(index, text)
+
+    @staticmethod
+    def shuffle_list(lst, inplace=True):
+        if not isinstance(lst, list):
+            raise TypeError('lst must be list.')
+
+        if inplace:  # 原地打乱列表
+            random.shuffle(lst)
+        else:
+            shuffled_lst = copy.deepcopy(lst)
+            random.shuffle(shuffled_lst)
+            return shuffled_lst

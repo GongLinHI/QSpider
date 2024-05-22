@@ -46,7 +46,7 @@ class QSpider(object):
         response: Response = self.sessions.get(f'https://www.wjx.cn/vm/{self.shortId}.aspx', headers=self.headers,
                                                timeout=10)
         # 建议：每个问卷的答题时间为5-60s
-        time.sleep(random.randrange(5, 60))
+        time.sleep(random.randrange(5, 30))
         return response
 
     def _get_all_params(self, response: Response):
