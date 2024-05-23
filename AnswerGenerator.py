@@ -93,17 +93,17 @@ class AnswerGenerator(object):
     def items(self):
         return self.__content.items()
 
-    def update(self, other: dict) -> None:
+    def update(self, other: dict):
         for k, v in other.items():
             self.add(k, v)
 
-    def clear(self) -> None:
+    def clear(self):
         self.__content.clear()
 
     @staticmethod
     def sort(iterable, *, key=None, desc=False):
         """
-        根据给定的key和desc参数对iterable进行排序。
+        根据给定的key和desc参数对iterable进行排序（默认升序，desc=False）。
 
         :param iterable: 需要排序的可迭代对象。
         :param key: 排序的键。如果为None或者可调用对象，则直接用作sorted函数的key参数。
@@ -337,7 +337,7 @@ class AnswerGenerator(object):
         self.add(index, text)
 
     @staticmethod
-    def shuffle_list(lst, inplace=True):
+    def shuffle_list(lst: list, inplace: bool = True):
         if not isinstance(lst, list):
             raise TypeError('lst must be list.')
 

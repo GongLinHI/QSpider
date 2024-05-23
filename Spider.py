@@ -11,9 +11,15 @@ from bs4 import BeautifulSoup
 # https://w.wjx.com/vm/rXz5Xu9.aspx
 class QSpider(object):
 
-    def __init__(self, shortId: str = ''):
-        self.sessions = requests.session()
+    def __init__(self, shortId: str = '', *, proxies: dict = None):
         self.shortId = shortId
+        self.sessions = requests.session()
+        if proxies is not None and len(proxies) != 0:
+            self.proxies = proxies
+            self.sessions.proxies = proxies
+        else:
+            self.proxies = {}
+
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
             'Accept-Encoding': 'gzip, deflate, br, zstd',
@@ -24,12 +30,22 @@ class QSpider(object):
             'Sec-Ch-Ua-Platform': r'"Windows"'
         }
 
-    def _decode_id(self, input: int) -> int:
+    def clear_proxies(self):
+        self.sessions.proxies.clear()
+
+    def update_proxies(self, proxies: dict = None):
+        if proxies is None:
+            self.clear_proxies()
+        elif len(proxies) != 0:
+            self.sessions.proxies = proxies
+        return True
+
+    def _decode_id(self, i: int) -> int:
         context = js2py.EvalJs(enable_require=True)
         with open('js/DecodeId.js', 'r', encoding='utf8') as f:
             script = f.read()
         context.execute(script)
-        return context.DecodeId(input)
+        return context.DecodeId(i)
 
     def _get_jqsign(self, jqnonce: str, ktimes: int):
         context = js2py.EvalJs(enable_require=True)
