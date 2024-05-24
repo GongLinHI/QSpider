@@ -1,9 +1,27 @@
 import copy
 import random
+from abc import abstractmethod
 from collections.abc import Iterable, Sized
-from typing import Union, Any
+from enum import Enum
+from typing import Union, Any, TypeVar, Type
 
 import numpy as np
+
+
+class ReturnType(Enum):
+    """
+    这是AnswerGenerator部分函数的返回值类型
+    - ReturnType.LIST 表明总是返回list
+    - ReturnType.DYNAMIC 表明：
+        - 若k=1，则返回单个值
+        - 否则，返回list
+    - ReturnType.NDARRAY 表明总是返回np,ndarray
+
+    建议使用ReturnType.LIST
+    """
+    LIST = list
+    DYNAMIC = (int, float, list)
+    NDARRAY = np.ndarray
 
 
 class AnswerGenerator(object):
@@ -59,6 +77,7 @@ class AnswerGenerator(object):
         str_list: list[str] = [f'{k}{self.question_answer_separator}{v}' for k, v in sorted(self.__content.items())]
         return self.separator.join(str_list)
 
+    @abstractmethod
     def rule(self) -> None:
         pass
 
@@ -129,41 +148,46 @@ class AnswerGenerator(object):
         return type(iterable)(sorted_iterable)
 
     @staticmethod
-    def sample(iterable, weights=None, k=1, *, replace=False):
+    def sample(iterable, weights=None, size=1, *, replace=False, return_type: ReturnType = ReturnType.LIST):
         """
         依据iterable和相应的权重weights进行无放回（默认）抽样。
 
         :param iterable: 候选的可迭代对象
         :param weights: 各个元素的权重
-        :param k: 抽样个数
+        :param size: 输出形状。如果给定的形状是，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
         :param replace: 是否进行又有放回抽样，默认是False
+        :param return_type: 返回值类型，默认为ReturnType.LIST，即总是返回list，详见ReturnType
         :return: 抽样结果
         """
         if weights is None:
             # 如果没有提供权重，则所有元素的权重相同
             weights = np.ones_like(iterable, dtype=float)
+        elif not isinstance(weights, np.ndarray):
+            weights = np.array(weights)
 
         # 确保权重数组与人口数组的长度相同
         if len(iterable) != len(weights):
             raise ValueError("The lengths of population and weights must be the same.")
 
         # 使用numpy的choice函数进行无放回抽样
-        samples = np.random.choice(iterable, size=k, replace=replace, p=weights / weights.sum())
-        # 如果k为1，返回单个样本，否则返回样本数组
+        samples = np.random.choice(iterable, size=size, replace=replace, p=weights / weights.sum())
 
-        if k == 1:
-            return samples[0]
-        else:
+        if return_type == ReturnType.NDARRAY:
+            return samples
+        elif return_type == ReturnType.LIST or (return_type == ReturnType.DYNAMIC and size != 1):
             return samples.tolist()
+        elif return_type == ReturnType.DYNAMIC and size == 1:
+            return samples[0]
 
     @staticmethod
-    def generate_normal_random(mu=0.0, sigma=1.0, size=1, dtype=float):
+    def generate_normal_random(mu=0.0, sigma=1.0, size=1, dtype=float, *, return_type: ReturnType = ReturnType.LIST):
         """
         生成符合正态分布的随机数。
         :param mu: 正态分布的均值。
         :param sigma: 正态分布的标准差。
-        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param size: 输出形状。如果给定的形状是，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
         :param dtype: 输出样本的数据类型。可以是 int 或 float。
+        :param return_type: 返回值类型，默认为ReturnType.LIST，即总是返回list，详见ReturnType
         :return: 从正态分布中抽取的随机数。
         """
         # 从正态分布中生成浮点数样本
@@ -173,18 +197,21 @@ class AnswerGenerator(object):
         if dtype != float and dtype is not None:
             samples = samples.astype(dtype)
 
-        if size == 1:
-            return samples[0]
-        else:
+        if return_type == ReturnType.NDARRAY:
+            return samples
+        elif return_type == ReturnType.LIST or (return_type == ReturnType.DYNAMIC and size != 1):
             return samples.tolist()
+        elif return_type == ReturnType.DYNAMIC and size == 1:
+            return samples[0]
 
     @staticmethod
-    def generate_poisson_random(lam=1.0, size=1, dtype=int):
+    def generate_poisson_random(lam=1.0, size=1, *, dtype=int, return_type: ReturnType = ReturnType.LIST):
         """
         生成符合泊松分布的随机数。
         :param lam: 泊松分布的参数λ（lambda），即事件发生的平均次数。
-        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param size: 输出形状。如果给定的形状是，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
         :param dtype: 输出样本的数据类型。可以是 int 或 float，但泊松分布通常用于整数计数，因此建议使用 int。
+        :param return_type: 返回值类型，默认为ReturnType.LIST，即总是返回list，详见ReturnType
         :return: 从泊松分布中抽取的随机数。
         """
         # 从泊松分布中生成样本
@@ -195,20 +222,22 @@ class AnswerGenerator(object):
         if dtype != int and dtype is not None:
             samples = samples.astype(dtype)
 
-            # 如果size为1，则返回一个单独的数而不是列表
-        if size == 1:
-            return samples[0]  # 或者 samples[0] 如果不是numpy scalar
-        else:
+        if return_type == ReturnType.NDARRAY:
+            return samples
+        elif return_type == ReturnType.LIST or (return_type == ReturnType.DYNAMIC and size != 1):
             return samples.tolist()
+        elif return_type == ReturnType.DYNAMIC and size == 1:
+            return samples[0]
 
     @staticmethod
-    def generate_binomial_random(n, p, size=1, dtype=int):
+    def generate_binomial_random(n, p, size=1, *, dtype=int, return_type: ReturnType = ReturnType.LIST):
         """
         生成符合二项分布的随机数。
         :param n: 试验次数
         :param p: 每次试验成功的概率
-        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param size: 输出形状。如果给定的形状是，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
         :param dtype: 输出样本的数据类型。通常是 int，因为二项分布是整数计数的。
+        :param return_type: 返回值类型，默认为ReturnType.LIST，即总是返回list，详见ReturnType
         :return: 从二项分布中抽取的随机数。
         """
         # 从二项分布中生成样本
@@ -218,19 +247,21 @@ class AnswerGenerator(object):
         if dtype != int and dtype is not None:
             samples = samples.astype(dtype)
 
-        # 如果size为1，则返回一个单独的数而不是列表或数组
-        if size == 1:
-            return samples[0]
-        else:
+        if return_type == ReturnType.NDARRAY:
+            return samples
+        elif return_type == ReturnType.LIST or (return_type == ReturnType.DYNAMIC and size != 1):
             return samples.tolist()
+        elif return_type == ReturnType.DYNAMIC and size == 1:
+            return samples[0]
 
     @staticmethod
-    def generate_exponential_random(scale=1.0, size=1, dtype=float):
+    def generate_exponential_random(scale=1.0, size=1, *, dtype=float, return_type: ReturnType = ReturnType.LIST):
         """
         生成符合指数分布的随机数。
         :param scale: 指数分布的比例参数（λ的倒数，即1/λ），也称为尺度参数。
-        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param size: 输出形状。如果给定的形状是，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
         :param dtype: 输出样本的数据类型。默认为 float。
+        :param return_type: 返回值类型，默认为ReturnType.LIST，即总是返回list，详见ReturnType
         :return: 从指数分布中抽取的随机数。
         """
         # 从指数分布中生成样本
@@ -240,20 +271,22 @@ class AnswerGenerator(object):
         if dtype != float and dtype is not None:
             samples = samples.astype(dtype)
 
-            # 如果size为1，则返回一个单独的数而不是列表或数组
-        if size == 1:
-            return samples[0]
-        else:
+        if return_type == ReturnType.NDARRAY:
+            return samples
+        elif return_type == ReturnType.LIST or (return_type == ReturnType.DYNAMIC and size != 1):
             return samples.tolist()
+        elif return_type == ReturnType.DYNAMIC and size == 1:
+            return samples[0]
 
     @staticmethod
-    def generate_gamma_random(shape, scale=1.0, size=1, dtype=float):
+    def generate_gamma_random(shape, scale=1.0, size=1, *, dtype=float, return_type: ReturnType = ReturnType.LIST):
         """
         生成符合伽马分布的随机数。
         :param shape: 伽马分布的形状参数（k，也称为α）。
         :param scale: 伽马分布的比例参数（θ，也称为β），也可以认为是1/λ。
-        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param size: 输出形状。如果给定的形状是，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
         :param dtype: 输出样本的数据类型。默认为 float。
+        :param return_type: 返回值类型，默认为ReturnType.LIST，即总是返回list，详见ReturnType
         :return: 从伽马分布中抽取的随机数。
         """
 
@@ -264,20 +297,22 @@ class AnswerGenerator(object):
         if dtype != float and dtype is not None:
             samples = samples.astype(dtype)
 
-        # 如果size为1，则返回一个单独的数而不是列表或数组
-        if size == 1:
-            return samples[0]
-        else:
+        if return_type == ReturnType.NDARRAY:
+            return samples
+        elif return_type == ReturnType.LIST or (return_type == ReturnType.DYNAMIC and size != 1):
             return samples.tolist()
+        elif return_type == ReturnType.DYNAMIC and size == 1:
+            return samples[0]
 
     @staticmethod
-    def generate_f_random(d1, d2, size=1, dtype=float):
+    def generate_f_random(d1, d2, size=1, *, dtype=float, return_type: ReturnType = ReturnType.LIST):
         """
         生成符合F分布的随机数。
         :param d1: 分子项的自由度（通常为正态分布的样本大小减1）。
         :param d2: 分母项的自由度（通常为正态分布的样本大小减1）。
-        :param size: 输出形状。如果给定的形状是，例如，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
+        :param size: 输出形状。如果给定的形状是，(m, n, k)，那么会抽取 m * n * k 个样本。默认为 1。
         :param dtype: 输出样本的数据类型。默认为 float。
+        :param return_type: 返回值类型，默认为ReturnType.LIST，即总是返回list，详见ReturnType
         :return: 从F分布中抽取的随机数。
         """
         # 从F分布中生成样本
@@ -287,11 +322,12 @@ class AnswerGenerator(object):
         if dtype != float and dtype is not None:
             samples = samples.astype(dtype)
 
-        # 如果size为1，则返回一个单独的数而不是列表或数组
-        if size == 1:
-            return samples[0]
-        else:
+        if return_type == ReturnType.NDARRAY:
+            return samples
+        elif return_type == ReturnType.LIST or (return_type == ReturnType.DYNAMIC and size != 1):
             return samples.tolist()
+        elif return_type == ReturnType.DYNAMIC and size == 1:
+            return samples[0]
 
     @staticmethod
     def generate_list(stop: int, *, rType=list):
@@ -337,7 +373,7 @@ class AnswerGenerator(object):
         self.add(index, text)
 
     @staticmethod
-    def shuffle_list(lst: list, inplace: bool = True):
+    def shuffle_list(lst: list, *, inplace: bool = True):
         if not isinstance(lst, list):
             raise TypeError('lst must be list.')
 
@@ -347,3 +383,7 @@ class AnswerGenerator(object):
             shuffled_lst = copy.deepcopy(lst)
             random.shuffle(shuffled_lst)
             return shuffled_lst
+
+
+T = TypeVar('T', bound=AnswerGenerator)
+AnswerGeneratorType = Type[T]
